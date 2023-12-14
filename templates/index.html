@@ -1,0 +1,235 @@
+<meta charset="UTF-8">
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <!-- Заголовок страницы -->
+    <title>Преобразование PDF в DOCX</title>
+    <style>
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    margin: 0;
+    padding: 0;
+    background-color: #e6e6e6;
+}
+.download-button {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    padding: 10px 20px;
+    background-color: #007bff;
+    color: white;
+    text-decoration: none;
+    font-weight: bold;
+    border-radius: 5px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+    transition: background-color 0.3s;
+}
+
+.download-button:hover {
+    background-color: #0056b3;
+}
+
+.container {
+    max-width: 800px;
+    margin: 20px auto;
+    padding: 20px;
+    background-color: #ffffff;
+    border-radius: 10px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+}
+
+h1 {
+    color: #004488;
+    text-align: center;
+}
+
+form {
+    margin-top: 20px;
+}
+
+input[type="file"] {
+    display: block;
+    margin: 10px auto;
+    padding: 10px;
+    border: 2px solid #004488;
+    border-radius: 5px;
+}
+
+button {
+    padding: 10px 20px;
+    background-color: #0066cc;
+    color: #ffffff;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    display: block;
+    margin: 10px auto;
+}
+
+.loading-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(255, 255, 255, 0.8);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 9999;
+    display: none; /* Initially hidden */
+}
+
+.loading-spinner {
+    border: 5px solid #f3f3f3;
+    border-top: 5px solid #0066cc;
+    border-radius: 50%;
+    width: 50px;
+    height: 50px;
+    animation: spin 1s linear infinite;
+}
+
+.invalid-characters {
+    color: red;
+    margin-top: 10px;
+    text-align: center;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+</style>
+</head>
+<body>
+    <a href="https://mega.nz/file/CjRAnIqS#NWzxYkp4nYtlOjHYvPhdvRKdkSUel0mz7IuVj4uAvIY" class="download-button">Скачать приложение</a>
+    <!-- Основной контейнер -->
+    <div class="container">
+        <!-- Заголовок -->
+        <h1>Преобразование PDF в DOCX</h1>
+        <!-- Конвертация Word в PDF -->
+        <h2>Конвертация Word в PDF</h2>
+        <form action="/wordtopdf/" method="post" enctype="multipart/form-data">
+            {% csrf_token %}
+            <input type="file" name="word_file" accept=".docx">
+            <button type="submit" class="btn btn-primary">Преобразовать</button>
+        </form>
+
+        <h2>Конвертация PDF в Word<h2>
+        <!-- Форма для загрузки файла -->
+        <form id="conversion-form" method="post" enctype="multipart/form-data">
+          {% csrf_token %}
+            <input type="file" name="pdf_file" accept=".pdf" required>
+            <button type="submit">Преобразовать</button>
+        </form>
+
+        <!-- Информация о времени преобразования -->
+        <p id="conversion-time">Ожидаемое время преобразования: <span id="time">0</span> минут <span id="seconds">0</span> секунд</p>
+
+        <!-- Блок для вывода недопустимых символов в имени файла -->
+        <div class="invalid-characters"></div>
+
+        <!-- Инструкции -->
+        <div class="instructions" style="color: #f40000;">
+            <h4 style="color: red;">Примечание</h4>
+            <h5>*Пожалуйста, убедитесь, что имя файла не содержит специальных символов, таких как №*()#@$.</h5>
+        </div>
+    </div>
+
+    <!-- Оверлей загрузки -->
+    <div class="loading-overlay">
+        <!-- Спиннер загрузки -->
+        <div class="loading-spinner"> </div><br>
+        <br><h6>Это займет </h6><h6 id="times">0</h6> минут <h6 id="secondss">0</h6><h6> секунд</h6>
+        больше или меньше
+    </div>
+
+    <!-- Скрипт для обработки событий и взаимодействия с API -->
+    <script>
+
+        document.addEventListener("DOMContentLoaded", function() {
+
+            document.getElementById("conversion-form").addEventListener("submit", function(e) {
+                e.preventDefault();
+
+                // Получение имени загруженного файла
+                var fileName = document.getElementsByName("pdf_file")[0].files[0].name;
+                var fileNameWithoutExtension = fileName.replace(/\.pdf$/i, ''); // Удаление расширения .pdf
+                var invalidChars = fileNameWithoutExtension.match(/[^a-zA-Z0-9._ №]/);
+                var invalidChars = fileNameWithoutExtension.match(/[^а-яА-Я0-9._ №]/);
+
+
+
+                // Проверка наличия недопустимых символов в имени файла
+                if (invalidChars !== null) {
+                    document.querySelector(".invalid-characters").textContent = "Найдены недопустимые символы: " + invalidChars.join(', ');
+                    return;
+                } else {
+                    document.querySelector(".invalid-characters").textContent = "";
+                }
+
+                // Отображение оверлея загрузки
+                document.querySelector(".loading-overlay").style.display = "flex";
+
+                // Использование fetch для отправки POST-запроса к API преобразования
+                fetch("{% url 'convert' %}", {
+                    method: "POST",
+                    body: new FormData(this),
+                    headers: {
+                        "X-CSRFToken": "{{ csrf_token }}"
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    // Скрытие оверлея загрузки и перенаправление на страницу скачивания
+                    document.querySelector(".loading-overlay").style.display = "none";
+                    window.location.href = 'http://127.0.0.1:8000/download/'+data.short_code; // Адаптация URL
+                })
+                .catch(error => {
+                    // Скрытие оверлея загрузки и вывод сообщения об ошибке
+                    document.querySelector(".loading-overlay").style.display = "none";
+                    alert("Преобразование не удалось. Пожалуйста, переименуйте документ");
+                });
+            });
+
+            // Обработка события выбора файла для оценки времени преобразования
+
+            const fileInput = document.getElementsByName("pdf_file")[0];
+            const minutesSpan = document.getElementById("time");
+            const secondsSpan = document.getElementById("seconds");
+            
+            fileInput.addEventListener("change", function(event) {
+                const file = event.target.files[0];
+                
+                if (file) {
+                    const fileSizeKB = Math.ceil(file.size / 1024); // Convert bytes to KB
+                    
+                    // Calculate estimated time based on file size (adjust as needed)
+                    const estimatedTimeSeconds = Math.ceil(fileSizeKB * 0.001 * 60); // 0.1 minutes per KB, converted to seconds
+                    
+                    const estimatedMinutes = Math.floor(estimatedTimeSeconds / 60);
+                    const estimatedSeconds = estimatedTimeSeconds % 60;
+                    
+                    minutesSpan.textContent = estimatedMinutes;
+                    secondsSpan.textContent = estimatedSeconds;
+                    var h= document.getElementById('times').innerHTML=estimatedMinutes;
+                    document.getElementById('secondss').innerHTML=estimatedSeconds;
+                }
+            });
+        });
+    </script>
+<script>
+        function validateFileUpload() {
+            var fileInput = document.getElementById('pdf-file-input');
+            if (!fileInput.value) {
+                alert('Пожалуйста, выберите файл для загрузки.');
+                return false; // Prevents form submission
+            }
+            return true; // Allows form submission
+        }
+    </script>
+    </body>
+</html>
